@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Lumio Messenger</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.22.0/firebase-storage-compat.min.js"></script>
+    <link rel="stylesheet" href="assets/css/style.css" />
+  </head>
+  <body>
+    <div id="authContainer" class="auth-wrapper">
+      <div id="loginPage" class="auth-page">
+        <div class="auth-box">
+          <div class="auth-logo">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle
+                cx="40"
+                cy="40"
+                r="38"
+                fill="url(#grad1)"
+                stroke="#0088cc"
+                stroke-width="2"
+              />
+              <path
+                d="M 25 40 L 35 50 L 55 30"
+                stroke="white"
+                stroke-width="4"
+                fill="none"
+                stroke-linecap="round"
+              />
+              <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop
+                    offset="0%"
+                    style="stop-color: #0088cc; stop-opacity: 1"
+                  />
+                  <stop
+                    offset="100%"
+                    style="stop-color: #00bfff; stop-opacity: 1"
+                  />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h1 class="auth-title">Lumio</h1>
+          <p class="auth-subtitle">ورود به حساب کاربری</p>
+          <div id="loginError"></div>
+          <form id="loginForm" class="auth-form">
+            <div class="input-group">
+              <input
+                type="email"
+                id="loginEmail"
+                placeholder="ایمیل"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <input
+                type="password"
+                id="loginPassword"
+                placeholder="رمز عبور"
+                required
+              />
+            </div>
+            <button type="submit" class="btn-primary" id="loginBtn">
+              ورود
+            </button>
+          </form>
+          <div class="auth-footer">
+            <span>حساب کاربری ندارید؟</span>
+            <a href="#" onclick="showSignup(); return false;">ثبت نام</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="signupPage" class="auth-page hidden">
+        <div class="auth-box">
+          <div class="auth-logo">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle
+                cx="40"
+                cy="40"
+                r="38"
+                fill="url(#grad2)"
+                stroke="#0088cc"
+                stroke-width="2"
+              />
+              <path
+                d="M 25 40 L 35 50 L 55 30"
+                stroke="white"
+                stroke-width="4"
+                fill="none"
+                stroke-linecap="round"
+              />
+              <defs>
+                <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop
+                    offset="0%"
+                    style="stop-color: #0088cc; stop-opacity: 1"
+                  />
+                  <stop
+                    offset="100%"
+                    style="stop-color: #00bfff; stop-opacity: 1"
+                  />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h1 class="auth-title">Lumio</h1>
+          <p class="auth-subtitle">ایجاد حساب کاربری</p>
+          <div id="signupError"></div>
+          <form id="signupForm" class="auth-form">
+            <div class="input-group">
+              <input
+                type="text"
+                id="signupDisplayName"
+                placeholder="نام و نام خانوادگی"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <input
+                type="text"
+                id="signupUsername"
+                placeholder="نام کاربری"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <input
+                type="email"
+                id="signupEmail"
+                placeholder="ایمیل"
+                required
+              />
+            </div>
+            <div class="input-group">
+              <input
+                type="password"
+                id="signupPassword"
+                placeholder="رمز عبور"
+                minlength="6"
+                required
+              />
+              <div class="strength-wrapper">
+                <div class="strength-bar">
+                  <div id="strengthBarFill" class="strength-bar-fill"></div>
+                </div>
+                <div id="strengthText" class="strength-text"></div>
+                <button id="genPasswordBtn" type="button" class="gen-pass-btn">
+                  تولید رمز قوی
+                </button>
+              </div>
+            </div>
+            <button type="submit" class="btn-primary" id="signupBtn">
+              ثبت نام
+            </button>
+          </form>
+          <div class="auth-footer">
+            <span>حساب کاربری دارید؟</span>
+            <a href="#" onclick="showLogin(); return false;">ورود</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="mainApp" class="main-app hidden">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <button class="menu-btn" onclick="showSettings()">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <h1 class="app-title">Lumio</h1>
+          <button class="search-btn" onclick="showSearchModal()">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="user-panel">
+          <div class="user-info">
+            <div class="user-avatar" id="sidebarAvatar"></div>
+            <div class="user-details">
+              <div class="user-name" id="sidebarName"></div>
+              <div class="user-status">آنلاین</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-list-wrapper">
+          <div class="chat-list" id="chatList">
+            <div class="empty-chats">
+              <div class="empty-icon">💬</div>
+              <p>هنوز چتی ندارید</p>
+              <button class="btn-start-chat" onclick="showSearchModal()">
+                شروع چت جدید
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="chat-area" id="chatArea">
+        <div class="welcome-screen">
+          <div class="welcome-content">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              <circle
+                cx="100"
+                cy="100"
+                r="95"
+                fill="none"
+                stroke="#2b5278"
+                stroke-width="3"
+              />
+              <path
+                d="M 60 100 L 80 120 L 140 60"
+                stroke="#0088cc"
+                stroke-width="8"
+                fill="none"
+                stroke-linecap="round"
+              />
+            </svg>
+            <h2>به Lumio خوش آمدید</h2>
+            <p>پیام‌رسانی سریع، امن و قدرتمند</p>
+            <button class="btn-primary" onclick="showSearchModal()">
+              شروع چت جدید
+            </button>
+          </div>
+        </div>
+      </main>
+
+      <nav class="mobile-nav">
+        <button class="nav-item active" onclick="showSidebar()">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            ></path>
+          </svg>
+          <span>چت‌ها</span>
+        </button>
+        <button class="nav-item" onclick="showSearchModal()">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <span>جستجو</span>
+        </button>
+        <button class="nav-item" onclick="showSettings()">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 1v6m0 6v6"></path>
+          </svg>
+          <span>تنظیمات</span>
+        </button>
+      </nav>
+    </div>
+
+    <div id="searchModal" class="modal hidden">
+      <div class="modal-overlay" onclick="closeSearchModal()"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>جستجوی کاربر</h2>
+          <button class="modal-close" onclick="closeSearchModal()">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="search-box">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input
+              type="text"
+              id="searchUsername"
+              placeholder="نام کاربری را وارد کنید..."
+            />
+            <button onclick="searchUser()" class="search-submit">جستجو</button>
+          </div>
+          <div id="searchResults" class="search-results"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="settingsModal" class="modal hidden">
+      <div class="modal-overlay" onclick="closeSettings()"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>تنظیمات</h2>
+          <button class="modal-close" onclick="closeSettings()">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <div class="settings-item">
+              <div class="user-profile">
+                <div class="profile-avatar" id="profileAvatar"></div>
+                <div class="profile-info">
+                  <h3 id="profileName"></h3>
+                  <p id="profileUsername"></p>
+                </div>
+              </div>
+            </div>
+            <div class="settings-item clickable" onclick="logout()">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span>خروج از حساب</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="assets/js/script.js"></script>
+  </body>
+</html>
