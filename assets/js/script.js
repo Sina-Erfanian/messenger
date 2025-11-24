@@ -344,7 +344,14 @@ function openChat(chat) {
 
 function loadMessages(chatId) {
   if (messagesListener) messagesListener();
-  showLoading(document.getElementById("chatMessages"), "");
+
+  const chatMessagesEl = document.getElementById("chatMessages");
+  if (!chatMessagesEl) return;
+
+  showLoading(chatMessagesEl, "");
+  messageCacheById = {};
+  const renderedMessages = new Map();
+  let isInitialRender = true;
 
   messagesListener = db
     .collection("chats")
@@ -355,28 +362,64 @@ function loadMessages(chatId) {
       const messagesEl = document.getElementById("chatMessages");
       if (!messagesEl) return;
 
-      messagesEl.innerHTML = "";
-      messageCacheById = {};
+      if (isInitialRender) {
+        messagesEl.innerHTML = "";
+        renderedMessages.clear();
+        isInitialRender = false;
+      }
 
-      snapshot.forEach((doc) => {
+      snapshot.docChanges().forEach((change) => {
+        const doc = change.doc;
         const message = { id: doc.id, ...doc.data() };
         messageCacheById[message.id] = message;
-        const messageEl = createMessageElement(message);
-        messagesEl.appendChild(messageEl);
 
-        if (message.senderId !== currentUser.uid && !message.read) {
-          db.collection("chats")
-            .doc(chatId)
-            .collection("messages")
-            .doc(doc.id)
-            .update({
-              read: true,
-            });
+        if (change.type === "added") {
+          const messageEl = createMessageElement(message);
+          const refNode = messagesEl.children[change.newIndex] || null;
+          messagesEl.insertBefore(messageEl, refNode);
+          renderedMessages.set(message.id, messageEl);
+          markMessageAsRead(chatId, message);
+        } else if (change.type === "modified") {
+          const existingEl = renderedMessages.get(message.id);
+          if (existingEl && existingEl.parentNode === messagesEl) {
+            updateMessageElement(existingEl, message);
+            if (
+              typeof change.newIndex === "number" &&
+              typeof change.oldIndex === "number" &&
+              change.newIndex !== change.oldIndex
+            ) {
+              const refNode = messagesEl.children[change.newIndex] || null;
+              messagesEl.insertBefore(existingEl, refNode);
+            }
+          } else {
+            const fallbackEl = createMessageElement(message);
+            const refNode = messagesEl.children[change.newIndex] || null;
+            messagesEl.insertBefore(fallbackEl, refNode);
+            renderedMessages.set(message.id, fallbackEl);
+          }
+          markMessageAsRead(chatId, message);
+        } else if (change.type === "removed") {
+          const existingEl = renderedMessages.get(message.id);
+          if (existingEl && existingEl.parentNode === messagesEl) {
+            messagesEl.removeChild(existingEl);
+          }
+          renderedMessages.delete(message.id);
+          delete messageCacheById[message.id];
         }
       });
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
     });
+}
+
+function markMessageAsRead(chatId, message) {
+  if (message.senderId === currentUser.uid || message.read) return;
+  db.collection("chats")
+    .doc(chatId)
+    .collection("messages")
+    .doc(message.id)
+    .update({ read: true })
+    .catch((error) => console.error("Error marking message read:", error));
 }
 
 function linkify(text) {
@@ -394,10 +437,15 @@ function linkify(text) {
 }
 
 function createMessageElement(message) {
-  const isOwn = message.senderId === currentUser.uid;
   const messageDiv = document.createElement("div");
-  messageDiv.className = "message" + (isOwn ? " own" : "");
-  messageDiv.dataset.messageId = message.id;
+  updateMessageElement(messageDiv, message);
+  return messageDiv;
+}
+
+function updateMessageElement(element, message) {
+  const isOwn = message.senderId === currentUser.uid;
+  element.className = "message" + (isOwn ? " own" : "");
+  element.dataset.messageId = message.id;
 
   let replyHtml = "";
   if (message.replyTo) {
@@ -464,7 +512,7 @@ function createMessageElement(message) {
       '<div class="message-text">' + linkify(message.text || "") + "</div>";
   }
 
-  messageDiv.innerHTML =
+  element.innerHTML =
     '<div class="message-bubble">' +
     actions +
     replyHtml +
@@ -474,8 +522,6 @@ function createMessageElement(message) {
     statusTicks +
     timeStr +
     "</div></div>";
-
-  return messageDiv;
 }
 
 async function sendMessage() {
