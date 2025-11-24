@@ -5,6 +5,23 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
+async function hashPassword(password) {
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    return hashHex;
+  } catch (error) {
+    console.error("Error hashing password:", error);
+    return password;
+  }
+}
+
 let currentUser = null;
 let currentChat = null;
 let chatsListener = null;
@@ -12,6 +29,38 @@ let messagesListener = null;
 let replyToMessage = null;
 let editingMessage = null;
 let messageCacheById = {};
+
+function setLoadingState(target, isLoading) {
+  if (!target) return;
+  if (isLoading) {
+    if (!target.dataset.originalHtml) {
+      target.dataset.originalHtml = target.innerHTML;
+    }
+    const text =
+      typeof target.dataset.loadingText === "string"
+        ? target.dataset.loadingText
+        : "";
+    const label = text
+      ? `<span class="loading-label">${text}</span>`
+      : "";
+    target.innerHTML = `<span class="loading-content"><span class="loading-spinner"></span>${label}</span>`;
+    target.classList.add("is-loading");
+    if ("disabled" in target) target.disabled = true;
+  } else {
+    if ("disabled" in target) target.disabled = false;
+    if (target.dataset.originalHtml) {
+      target.innerHTML = target.dataset.originalHtml;
+      delete target.dataset.originalHtml;
+    }
+    target.classList.remove("is-loading");
+  }
+}
+
+function showLoading(container, text) {
+  if (!container) return;
+  const label = text ? `<span class="loading-label">${text}</span>` : "";
+  container.innerHTML = `<div class="loading-state"><span class="loading-spinner"></span>${label}</div>`;
+}
 
 auth.onAuthStateChanged(async (user) => {
   if (user) {
@@ -58,18 +107,17 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
   const btn = document.getElementById("loginBtn");
   const errorDiv = document.getElementById("loginError");
 
-  btn.disabled = true;
-  btn.textContent = "در حال ورود...";
   errorDiv.innerHTML = "";
+  setLoadingState(btn, true);
 
   try {
-    await auth.signInWithEmailAndPassword(email, password);
+    const hashedPassword = await hashPassword(password);
+    await auth.signInWithEmailAndPassword(email, hashedPassword);
   } catch (error) {
     errorDiv.innerHTML =
       '<div class="error-message">' + mapAuthErrorToFa(error) + "</div>";
   } finally {
-    btn.disabled = false;
-    btn.textContent = "ورود";
+    setLoadingState(btn, false);
   }
 });
 
@@ -85,9 +133,17 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
   const btn = document.getElementById("signupBtn");
   const errorDiv = document.getElementById("signupError");
 
-  btn.disabled = true;
-  btn.textContent = "در حال ثبت نام...";
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.isValid) {
+    errorDiv.innerHTML =
+      '<div class="error-message">' + passwordValidation.message + "</div>";
+    return;
+  }
+
   errorDiv.innerHTML = "";
+  setLoadingState(btn, true);
+
+  let signupSuccess = false;
 
   try {
     const usernameQuery = await db
@@ -98,9 +154,11 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
       throw new Error("نام کاربری قبلاً استفاده شده است");
     }
 
+    const hashedPassword = await hashPassword(password);
+
     const userCredential = await auth.createUserWithEmailAndPassword(
       email,
-      password
+      hashedPassword
     );
     const user = userCredential.user;
 
@@ -116,11 +174,16 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
     });
 
     await user.updateProfile({ displayName: displayName });
+    signupSuccess = true;
   } catch (error) {
     errorDiv.innerHTML =
       '<div class="error-message">' + mapAuthErrorToFa(error) + "</div>";
-    btn.disabled = false;
-    btn.textContent = "ثبت نام";
+  } finally {
+    setLoadingState(btn, false);
+    if (signupSuccess) {
+      e.target.reset();
+      updateStrength("");
+    }
   }
 });
 
@@ -143,19 +206,29 @@ function mapAuthErrorToFa(error) {
   return "خطایی رخ داد. لطفاً دوباره تلاش کنید";
 }
 
-async function logout() {
-  if (currentUser) {
-    await db.collection("users").doc(currentUser.uid).update({
-      isOnline: false,
-      lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
-    });
+async function logout(trigger) {
+  const source =
+    trigger && trigger instanceof HTMLElement ? trigger : null;
+  if (source) setLoadingState(source, true);
+  try {
+    if (currentUser) {
+      await db.collection("users").doc(currentUser.uid).update({
+        isOnline: false,
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await auth.signOut();
+  } catch (error) {
+    console.error("Error during logout:", error);
+  } finally {
+    if (source) setLoadingState(source, false);
+    closeSettings();
   }
-  await auth.signOut();
-  closeSettings();
 }
 
 function loadChats() {
   if (chatsListener) chatsListener();
+  showLoading(document.getElementById("chatList"), "در حال بارگذاری...");
 
   chatsListener = db
     .collection("chats")
@@ -261,8 +334,8 @@ function openChat(chat) {
 
   if (window.innerWidth <= 768) {
     const chatAreaEl = document.getElementById("chatArea");
-    chatAreaEl.classList.add("active"); // چت را فعال می‌کنیم
-    document.getElementById("sidebar").classList.add("hidden"); // سایدبار مخفی شود
+    chatAreaEl.classList.add("active");
+    document.getElementById("sidebar").classList.add("hidden");
   }
 
   setupEmojiPicker();
@@ -271,6 +344,7 @@ function openChat(chat) {
 
 function loadMessages(chatId) {
   if (messagesListener) messagesListener();
+  showLoading(document.getElementById("chatMessages"), "");
 
   messagesListener = db
     .collection("chats")
@@ -410,7 +484,6 @@ async function sendMessage() {
 
   if (!text || !currentChat) return;
 
-  // Clear input immediately for better UX
   input.value = "";
   input.style.height = "auto";
   const emojiPanelEl = document.getElementById("emojiPanel");
@@ -595,8 +668,6 @@ function subscribeTyping(otherUserId, chatId) {
     });
 }
 
-// like reactions removed
-
 function replyTo(messageId) {
   replyToMessage = messageId;
   const replyPreview = document.getElementById("replyPreview");
@@ -647,9 +718,7 @@ function copyMessage(messageId) {
   const msg = messageCacheById[messageId];
   const text = msg && msg.text ? msg.text : "";
   if (!text) return;
-  navigator.clipboard.writeText(text).then(() => {
-    // no-op UI toast for simplicity
-  });
+  navigator.clipboard.writeText(text);
 }
 
 function showSearchModal() {
@@ -668,6 +737,8 @@ async function searchUser() {
   const resultsEl = document.getElementById("searchResults");
 
   if (!username) return;
+
+  showLoading(resultsEl, "در حال جستجو...");
 
   const snapshot = await db
     .collection("users")
@@ -782,8 +853,8 @@ function showSidebar() {
 function closeChatMobile() {
   if (window.innerWidth <= 768) {
     const chatAreaEl = document.getElementById("chatArea");
-    chatAreaEl.classList.remove("active"); // چت را مخفی کنیم
-    document.getElementById("sidebar").classList.remove("hidden"); // سایدبار را نشان دهیم
+    chatAreaEl.classList.remove("active");
+    document.getElementById("sidebar").classList.remove("hidden");
   }
 }
 
@@ -812,7 +883,31 @@ document.getElementById("searchUsername").addEventListener("keypress", (e) => {
   if (e.key === "Enter") searchUser();
 });
 
-// Password strength + generator
+function validatePassword(password) {
+  const errors = [];
+
+  if (password.length < 8) {
+    errors.push("رمز عبور باید حداقل ۸ کاراکتر باشد");
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push("رمز عبور باید حداقل یک حرف بزرگ داشته باشد");
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push("رمز عبور باید حداقل یک حرف کوچک داشته باشد");
+  }
+  if (!/[0-9]/.test(password)) {
+    errors.push("رمز عبور باید حداقل یک عدد داشته باشد");
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    errors.push("رمز عبور باید حداقل یک کاراکتر خاص (!@#$%^&*...) داشته باشد");
+  }
+
+  return {
+    isValid: errors.length === 0,
+    message: errors.join(". "),
+  };
+}
+
 const signupPasswordEl = document.getElementById("signupPassword");
 const strengthBarFill = document.getElementById("strengthBarFill");
 const strengthText = document.getElementById("strengthText");
@@ -821,28 +916,59 @@ const genBtn = document.getElementById("genPasswordBtn");
 function scorePassword(pw) {
   let score = 0;
   if (!pw) return 0;
-  const lengthScore = Math.min(10, Math.max(0, pw.length - 6));
+
+  const lengthScore = Math.min(30, pw.length >= 8 ? 30 : pw.length * 3);
   score += lengthScore;
-  if (/[a-z]/.test(pw)) score += 10;
-  if (/[A-Z]/.test(pw)) score += 10;
-  if (/[0-9]/.test(pw)) score += 10;
-  if (/[^A-Za-z0-9]/.test(pw)) score += 15;
-  if (pw.length >= 12) score += 15;
+
+  if (/[a-z]/.test(pw)) score += 15;
+  if (/[A-Z]/.test(pw)) score += 15;
+  if (/[0-9]/.test(pw)) score += 15;
+  if (/[^A-Za-z0-9]/.test(pw)) score += 25;
+
   return Math.min(100, score);
 }
 
 function strengthLabel(score) {
   if (score < 30) return { text: "ضعیف", color: "#e53935", width: "30%" };
   if (score < 60) return { text: "متوسط", color: "#fbc02d", width: "60%" };
+  if (score < 85) return { text: "خوب", color: "#ff9800", width: "85%" };
   return { text: "قوی", color: "#43a047", width: "100%" };
 }
 
 function updateStrength(pw) {
-  const score = scorePassword(pw);
-  const s = strengthLabel(score);
-  strengthBarFill.style.width = s.width;
-  strengthBarFill.style.background = s.color;
-  strengthText.textContent = "قدرت رمز: " + s.text;
+  if (strengthBarFill && strengthText) {
+    if (!pw) {
+      strengthBarFill.style.width = "0%";
+      strengthBarFill.style.background = "transparent";
+      strengthText.textContent = "";
+    } else {
+      const score = scorePassword(pw);
+      const s = strengthLabel(score);
+      strengthBarFill.style.width = s.width;
+      strengthBarFill.style.background = s.color;
+      strengthText.textContent = "قدرت رمز: " + s.text;
+    }
+  }
+
+  const reqs = {
+    length: pw.length >= 8,
+    uppercase: /[A-Z]/.test(pw),
+    lowercase: /[a-z]/.test(pw),
+    number: /[0-9]/.test(pw),
+    special: /[^A-Za-z0-9]/.test(pw),
+  };
+
+  Object.keys(reqs).forEach((key) => {
+    const el = document.getElementById(`req-${key}`);
+    if (el) {
+      const checkmark = el.querySelector(".checkmark");
+      if (checkmark) {
+        checkmark.textContent = reqs[key] ? "✓" : "✗";
+        checkmark.style.color = reqs[key] ? "#43a047" : "#e53935";
+        el.style.color = reqs[key] ? "#43a047" : "#666";
+      }
+    }
+  });
 }
 
 if (signupPasswordEl) {
@@ -859,21 +985,50 @@ if (genBtn) {
 }
 
 function generateStrongPassword() {
-  const charset =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:,.<>?";
+  const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const numbers = "0123456789";
+  const special = "!@#$%^&*()-_=+[]{};:,.<>?";
+  const allChars = lowercase + uppercase + numbers + special;
   const length = 16;
   let pw = "";
+
+  pw += lowercase[Math.floor(Math.random() * lowercase.length)];
+  pw += uppercase[Math.floor(Math.random() * uppercase.length)];
+  pw += numbers[Math.floor(Math.random() * numbers.length)];
+  pw += special[Math.floor(Math.random() * special.length)];
+
   const cryptoObj = window.crypto || window.msCrypto;
   if (cryptoObj && cryptoObj.getRandomValues) {
-    const arr = new Uint32Array(length);
+    const arr = new Uint32Array(length - 4);
     cryptoObj.getRandomValues(arr);
-    for (let i = 0; i < length; i++) {
-      pw += charset[arr[i] % charset.length];
+    for (let i = 0; i < length - 4; i++) {
+      pw += allChars[arr[i] % allChars.length];
     }
   } else {
-    for (let i = 0; i < length; i++) {
-      pw += charset[Math.floor(Math.random() * charset.length)];
+    for (let i = 0; i < length - 4; i++) {
+      pw += allChars[Math.floor(Math.random() * allChars.length)];
     }
   }
-  return pw;
+
+  return pw.split("").sort(() => Math.random() - 0.5).join("");
 }
+
+window.showSignup = showSignup;
+window.showLogin = showLogin;
+window.showSettings = showSettings;
+window.showSearchModal = showSearchModal;
+window.closeSearchModal = closeSearchModal;
+window.searchUser = searchUser;
+window.closeSettings = closeSettings;
+window.logout = logout;
+window.showSidebar = showSidebar;
+window.closeChatMobile = closeChatMobile;
+window.replyTo = replyTo;
+window.cancelReply = cancelReply;
+window.editMessage = editMessage;
+window.cancelEdit = cancelEdit;
+window.deleteMessage = deleteMessage;
+window.copyMessage = copyMessage;
+window.sendMessage = sendMessage;
+window.handleFileSelect = handleFileSelect;

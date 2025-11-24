@@ -25,7 +25,8 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     height: 100vh;
     -webkit-font-smoothing: antialiased;
 }
@@ -34,6 +35,7 @@ body {
 
 .auth-wrapper {
     min-height: 100vh;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -120,6 +122,49 @@ body {
 .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.is-loading {
+    pointer-events: none;
+}
+
+.loading-content {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.loading-label {
+    font-size: inherit;
+}
+
+.loading-spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--accent);
+    animation: spinner 0.6s linear infinite;
+}
+
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+@keyframes spinner {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .auth-footer {
@@ -211,6 +256,30 @@ body {
 .user-panel {
     padding: 16px;
     border-bottom: 1px solid var(--divider);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.logout-icon {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logout-icon:hover {
+    color: var(--accent);
+    border-color: var(--divider);
+    background: var(--bg-tertiary);
 }
 
 .user-info {
@@ -567,8 +636,6 @@ body {
     color: var(--error);
 }
 
-/* reactions removed */
-
 .typing-indicator {
     display: inline-flex;
     align-items: center;
@@ -600,6 +667,32 @@ body {
 @keyframes blink {
     0%, 80%, 100% { opacity: 0.2; }
     40% { opacity: 1; }
+}
+
+.password-requirements {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.requirement {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #666;
+    transition: all 0.2s;
+}
+
+.requirement .checkmark {
+    font-size: 14px;
+    font-weight: bold;
+    color: #e53935;
+    min-width: 16px;
 }
 
 .strength-wrapper {
@@ -966,6 +1059,58 @@ body {
     font-size: 12px;
 }
 
+@media (max-width: 600px) {
+    body {
+        height: auto;
+    }
+
+    .auth-wrapper {
+        align-items: flex-start;
+        padding: 24px 16px 32px;
+    }
+
+    .auth-page {
+        max-width: 100%;
+    }
+
+    .auth-box {
+        padding: 28px 20px;
+    }
+
+    .auth-title {
+        font-size: 26px;
+    }
+
+    .auth-subtitle {
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+
+    .auth-form {
+        gap: 12px;
+    }
+
+    .password-requirements {
+        max-height: 180px;
+        overflow-y: auto;
+    }
+
+    .strength-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .strength-text {
+        font-size: 12px;
+    }
+
+    .gen-pass-btn {
+        width: 100%;
+        text-align: center;
+    }
+}
+
 @media (max-width: 768px) {
      #sidebar {
         width: 100%;
@@ -985,7 +1130,7 @@ body {
         bottom: 0;
         right: 0;
         z-index: 20;
-        display: none; /* اول مخفی باشد */
+        display: none;
         flex-direction: column;
         overflow: hidden;
     }
@@ -1020,5 +1165,9 @@ body {
         bottom: 70px;
         right: 8px;
         grid-template-columns: repeat(6, 1fr);
+    }
+
+    .logout-icon {
+        display: none;
     }
 }
